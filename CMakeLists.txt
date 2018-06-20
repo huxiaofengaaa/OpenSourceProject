@@ -5,4 +5,5 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/Library)
 
 ## For library
 add_subdirectory(googletest)
-
+add_subdirectory(memwatch)
+add_subdirectory(cJSON)
