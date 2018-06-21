@@ -1,12 +1,12 @@
 /***********************************************************************************
 
  * 文 件 名   : aes_cbc.c
- * 负 责 人   : 朱俊杰
+ * 负 责 人   :
  * 创建日期   : 2017年7月26日
  * 版 本 号   : 
  * 文件描述   : 加密模式：CBC 填充方式：PKCS5Padding 偏移量：”0000000000000000”(16
                 个 0) 输出格式：base64 字符集：utf-8
- * 版权说明   : Copyright (C) 2000-2017   烽火通信科技股份有限公司
+ * 版权说明   :
  * 其    他   : 
  * 修改日志   : 
 
@@ -44,7 +44,7 @@ static void hex_print(const void* pv, size_t len)
 
 /*****************************************************************************
  * 函 数 名  : PadData
- * 负 责 人  : 朱俊杰
+ * 负 责 人  :
  * 创建日期  : 2017年8月10日
  * 函数功能  : 计算pad实际长度
  * 输入参数  : unsigned char *ibuf  buffer
@@ -78,7 +78,7 @@ static unsigned int paddata (unsigned char *ibuf, unsigned int ilen, int blksize
 
 /*****************************************************************************
  * 函 数 名  : NoPadLen
- * 负 责 人  : 朱俊杰
+ * 负 责 人  :
  * 创建日期  : 2017年8月10日
  * 函数功能  : 计算实际长度
  * 输入参数  : unsigned char *ibuf  buffer
@@ -102,7 +102,7 @@ static unsigned int nopadlen (unsigned char *ibuf, unsigned int ilen)
 
 /*****************************************************************************
  * 函 数 名  : ez_AES_cbc_encrypt_PKCS5Padding
- * 负 责 人  : 朱俊杰
+ * 负 责 人  :
  * 创建日期  : 2017年7月26日
  * 函数功能  : AES-128 CBC PKCS5Padding off-16-0 base64 utf-8加密实现
  * 输入参数  : const char *in            input string before encrypt
@@ -243,7 +243,7 @@ int ez_AES_cbc_encrypt_PKCS5Padding(const char *in,
 
 /*****************************************************************************
  * 函 数 名  : encrypt_cbcaes
- * 负 责 人  : 朱俊杰
+ * 负 责 人  :
  * 创建日期  : 2017年7月26日
  * 函数功能  : AES-128 CBC加密
  * 输入参数  : char *in   string before encrypted
@@ -293,7 +293,7 @@ void encrypt_cbcaes(char *in, char *out, char *userKey)
 
 /*****************************************************************************
  * 函 数 名  : encrypt_cbcaes_base64
- * 负 责 人  : 朱俊杰
+ * 负 责 人  :
  * 创建日期  : 2017年8月10日
  * 函数功能  : aes-128-cbc pck5spadding iv="0000000000000000" base64
  * 输入参数  : char *in   待加密字串、
@@ -329,7 +329,7 @@ char *encrypt_cbcaes_base64(char *in, char *key)
 
 /*****************************************************************************
  * 函 数 名  : ez_AES_cbc_decrypt_PKCS5Padding
- * 负 责 人  : 朱俊杰
+ * 负 责 人  :
  * 创建日期  : 2017年7月26日
  * 函数功能  : AES-128 CBC PKCS5Padding off-16-0 base64 utf-8解密实现
  * 输入参数  : const char *in            input string before decrypt
@@ -409,7 +409,7 @@ int ez_AES_cbc_decrypt_PKCS5Padding(char *in,
 
 /*****************************************************************************
  * 函 数 名  : decrypt_cbcaes
- * 负 责 人  : 朱俊杰
+ * 负 责 人  :
  * 创建日期  : 2017年7月26日
  * 函数功能  : AES-128 CBC解密
  * 输入参数  : char *in   string before decrypted
@@ -487,7 +487,7 @@ int decrypt_cbcaes(char *in, int inlen, char *out, char *userKey)
 
 /*****************************************************************************
  * 函 数 名  : decrypt_cbcaes_base64
- * 负 责 人  : 朱俊杰
+ * 负 责 人  :
  * 创建日期  : 2017年8月10日
  * 函数功能  : aes-128-cbc pck5spadding iv="0000000000000000" base64
  * 输入参数  : char *in   待加密字串、
