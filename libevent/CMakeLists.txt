@@ -100,8 +100,11 @@ target_link_libraries(event_test_test-time        event)
 target_link_libraries(event_test_test-weof        event)
 target_link_libraries(event_test_regress          event pthread event_pthreads)
 
+## demo
+add_executable(01_event_signal          demo/01_event_signal.c)
+add_executable(02_event_timer           demo/02_event_timer.c)
 
-
-
+target_link_libraries(01_event_signal            event)
+target_link_libraries(02_event_timer             event)
 
 
