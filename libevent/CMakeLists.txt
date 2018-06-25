@@ -103,8 +103,13 @@ target_link_libraries(event_test_regress          event pthread event_pthreads)
 ## demo
 add_executable(01_event_signal          demo/01_event_signal.c)
 add_executable(02_event_timer           demo/02_event_timer.c)
+add_executable(03_event_dns             demo/03_event_dns.c)
+add_executable(04_event_udpserver       demo/04_event_udpserver.c)
+add_executable(05_event_udpclient       demo/05_event_udpclient.c)
 
 target_link_libraries(01_event_signal            event)
 target_link_libraries(02_event_timer             event)
-
+target_link_libraries(03_event_dns               event)
+target_link_libraries(04_event_udpserver         event)
+target_link_libraries(05_event_udpclient         event)
 
