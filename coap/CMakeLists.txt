@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-set(CMAKE_C_FLAGS "-g -DWITH_POSIX ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-g -DWITH_POSIX -DDEBUG_ENABLE ${CMAKE_C_FLAGS}")
 
 set(COAP_SRC src/async.c
              src/block.c  
