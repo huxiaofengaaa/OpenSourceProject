@@ -310,6 +310,21 @@ void showLocalAddress(int p_socket, int p_netType)
 	char l_host[32] = { 0 };
 	int l_port = 0;
 
+	struct sockaddr l_localAddr;
+	socklen_t l_localAddrLength = sizeof(struct sockaddr);
+	if(0 != getsockname(p_socket, (struct sockaddr*)&l_localAddr, &l_localAddrLength))
+	{
+		printf("showLocalAddress - getsockname failed\n");
+	}
+	else
+	{
+		if(0 == getAddressString((struct sockaddr*)&l_localAddr, l_host, sizeof(l_host), &l_port))
+		{
+			printf("local address %s:%d\n", l_host, l_port);
+		}
+	}
+
+#if 0
 	switch(p_netType)
 	{
 	case AF_INET:
@@ -352,9 +367,120 @@ void showLocalAddress(int p_socket, int p_netType)
 		break;
 	}
 	}
+#endif
+}
+/*
+ * p_msgType: COAP_MESSAGE_CON or COAP_MESSAGE_NON
+ */
+coap_pdu_t *createCoapNewRequest(coap_context_t *p_coapContext, char* p_method, coap_list_t *p_optlist, unsigned char p_msgType,
+		str* p_Token, str* p_payload)
+{
+
+	//coap_list_t *opt;
+
+	if(p_coapContext == NULL || p_method == NULL)
+	{
+		return NULL;
+	}
+
+	int i = 0;
+	int l_methodIndex = -1;
+	char *methods[] = { 0, "get", "post", "put", "delete", 0};
+	for(i = 1; methods[i] != 0; i++)
+	{
+		if(strcasecmp(p_method, methods[i]) == 0)
+		{
+			l_methodIndex = i;
+			break;
+		}
+	}
+	if(l_methodIndex < 1)
+	{
+		return NULL;
+	}
+
+	coap_pdu_t *l_newPdu = coap_new_pdu();
+	if(l_newPdu == NULL)
+	{
+		return NULL;
+	}
+
+	l_newPdu->hdr->type = p_msgType; //
+	l_newPdu->hdr->id = coap_new_message_id(p_coapContext);
+	l_newPdu->hdr->code = l_methodIndex;
+
+	if(p_Token && p_Token->length > 0)
+	{
+		l_newPdu->hdr->token_length = p_Token->length;
+		if (!coap_add_token(l_newPdu, p_Token->length, p_Token->s))
+		{
+			printf("cannot add token to request\n");
+		}
+	}
+	else
+	{
+		l_newPdu->hdr->token_length = 0;
+	}
+
+	coap_show_pdu(l_newPdu);
+
+
+	coap_list_t *l_tmpOpt = NULL;
+	for (l_tmpOpt = p_optlist; l_tmpOpt != NULL; l_tmpOpt = l_tmpOpt->next)
+	{
+		coap_add_option(l_newPdu, COAP_OPTION_KEY(*(coap_option *)l_tmpOpt->data),
+				COAP_OPTION_LENGTH(*(coap_option *)l_tmpOpt->data),
+				COAP_OPTION_DATA(*(coap_option *)l_tmpOpt->data));
+	}
+
+	if(p_Token != NULL && p_Token->length > 0)
+	{
+		l_newPdu->hdr->token_length = p_Token->length;
+		if ( !coap_add_token(l_newPdu, p_Token->length, p_Token->s))
+		{
+			printf("cannot add token to request\n");
+		}
+	}
+
+	if(p_payload != NULL && p_payload->length)
+	{
+		coap_add_data(l_newPdu, p_payload->length, p_payload->s);
+	}
+	return l_newPdu;
 }
 
-int sendCoapRequestMsg(char* p_dstUrl)
+void showPDU(coap_pdu_t *p_pdu)
+{
+	char* c_messageType[4] = {"COAP_MESSAGE_CON", "COAP_MESSAGE_NON", "COAP_MESSAGE_ACK", "COAP_MESSAGE_RST"};
+	char *methods[] = { 0, "get", "post", "put", "delete", 0};
+	int i = 0;
+	if(p_pdu != NULL)
+	{
+		printf("[PUD] max size  %ld\n", p_pdu->max_size);
+		if(p_pdu->hdr != NULL)
+		{
+			printf("[PUD header] token_length  %d\n", p_pdu->hdr->token_length);
+			printf("[PUD header] type          %s\n", c_messageType[p_pdu->hdr->type]);
+			printf("[PUD header] version       %d\n", p_pdu->hdr->version);
+			printf("[PUD header] method        %s\n", methods[p_pdu->hdr->code]);
+			printf("[PUD header] id            %d\n", ntohs(p_pdu->hdr->id));
+			printf("[PUD header] token         ");
+			for(i = 0 ; i < p_pdu->hdr->token_length ; i++)
+			{
+				printf("%c", p_pdu->hdr->token[i]);
+			}
+			printf("\n");
+		}
+		printf("[PUD] max_delta %d\n", p_pdu->max_delta);
+		printf("[PUD] length    %d\n", p_pdu->length);
+		if(p_pdu->data != NULL)
+		{
+			printf("[PUD] data    %s\n", p_pdu->data);
+		}
+	}
+}
+
+int sendCoapRequestMsg(char* p_dstUrl, char* p_method, char* p_token, char* p_payload)
 {
 	if(p_dstUrl == NULL || strlen(p_dstUrl) <= 0)
 	{
@@ -404,8 +530,27 @@ int sendCoapRequestMsg(char* p_dstUrl)
 	showOptList(l_currentOptlist);
 
 	/*
+	 * create message PDU
+	 */
+	str l_token;
+	COAP_SET_STR(&l_token, strlen(p_token), p_token);
+	str l_payload;
+	COAP_SET_STR(&l_payload, strlen(p_payload), p_payload);
+	coap_pdu_t * l_newPDU = createCoapNewRequest(l_coapContext, p_method, l_currentOptlist,
+			COAP_MESSAGE_CON, &l_token, &l_payload);
+	if(l_newPDU == NULL)
+	{
+		printf("create new coap request failed\n");
+		releaseURLResource(l_dstHost, l_dstPath, l_dstPuery);
+		coap_free_context(l_coapContext);
+		return -1;
+	}
+	showPDU(l_newPDU);
+
+	/*
 	 * release resource and memory
 	 */
+	coap_delete_pdu(l_newPDU);
 	releaseURLResource(l_dstHost, l_dstPath, l_dstPuery);
 	coap_free_context(l_coapContext);
 	return 0;
@@ -414,7 +559,9 @@ int sendCoapRequestMsg(char* p_dstUrl)
 int main(int argc, char** argv)
 {
 	char* l_inputUrl2 = "coap://[10.96.17.51]/sensors/temperature?value";
-	sendCoapRequestMsg(l_inputUrl2);
+	char* l_token = "cafe";
+	char* l_payload = "abcd";
+	sendCoapRequestMsg(l_inputUrl2, "get", l_token, l_payload);
 	return 0;
 }
 

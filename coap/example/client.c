@@ -1016,12 +1016,26 @@ int getAddressString(struct sockaddr* p_sa, char* p_buffer, int p_bufferSize, in
 	}
 	return 0;
 }
-
 void showLocalAddress(int p_socket, int p_netType)
 {
 	char l_host[32] = { 0 };
 	int l_port = 0;
 
+	struct sockaddr l_localAddr;
+	socklen_t l_localAddrLength = sizeof(struct sockaddr);
+	if(0 != getsockname(p_socket, (struct sockaddr*)&l_localAddr, &l_localAddrLength))
+	{
+		printf("showLocalAddress - getsockname failed\n");
+	}
+	else
+	{
+		if(0 == getAddressString((struct sockaddr*)&l_localAddr, l_host, sizeof(l_host), &l_port))
+		{
+			printf("local address %s:%d\n", l_host, l_port);
+		}
+	}
+
+#if 0
 	switch(p_netType)
 	{
 	case AF_INET:
@@ -1063,6 +1077,38 @@ void showLocalAddress(int p_socket, int p_netType)
 		printf("unsupported type %d\n", p_netType);
 		break;
 	}
+	}
+#endif
+}
+
+void showPDU(coap_pdu_t *p_pdu)
+{
+	char* c_messageType[4] = {"COAP_MESSAGE_CON", "COAP_MESSAGE_NON", "COAP_MESSAGE_ACK", "COAP_MESSAGE_RST"};
+	char *methods[] = { 0, "get", "post", "put", "delete", 0};
+	int i = 0;
+	if(p_pdu != NULL)
+	{
+		printf("[PUD] max size  %ld\n", p_pdu->max_size);
+		if(p_pdu->hdr != NULL)
+		{
+			printf("[PUD header] token_length  %d\n", p_pdu->hdr->token_length);
+			printf("[PUD header] type          %s\n", c_messageType[p_pdu->hdr->type]);
+			printf("[PUD header] version       %d\n", p_pdu->hdr->version);
+			printf("[PUD header] method        %s\n", methods[p_pdu->hdr->code]);
+			printf("[PUD header] id            %d\n", ntohs(p_pdu->hdr->id));
+			printf("[PUD header] token         ");
+			for(i = 0 ; i < p_pdu->hdr->token_length ; i++)
+			{
+				printf("%c", p_pdu->hdr->token[i]);
+			}
+			printf("\n");
+		}
+		printf("[PUD] max_delta %d\n", p_pdu->max_delta);
+		printf("[PUD] length    %d\n", p_pdu->length);
+		if(p_pdu->data != NULL)
+		{
+			printf("[PUD] data    %s\n", p_pdu->data);
+		}
 	}
 }
 
@@ -1254,6 +1300,8 @@ int main(int argc, char **argv)
 		coap_show_pdu(pdu);
 	}
 #endif
+
+	showPDU(pdu);
 
 	if (pdu->hdr->type == COAP_MESSAGE_CON)
 		tid = coap_send_confirmed(ctx, &dst, pdu);
