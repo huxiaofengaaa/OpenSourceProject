@@ -984,6 +984,87 @@ coap_context_t *get_context(const char *node, const char *port)
 	freeaddrinfo(result);
 	return ctx;
 }
+int getAddressString(struct sockaddr* p_sa, char* p_buffer, int p_bufferSize, int* p_port)
+{
+	if(p_sa == NULL || p_buffer == NULL || p_port == NULL)
+	{
+		return -1;
+	}
+
+	switch(p_sa->sa_family)
+	{
+	case AF_INET:
+	{
+		if(NULL == inet_ntop(AF_INET, &(((struct sockaddr_in*)p_sa)->sin_addr), p_buffer, p_bufferSize))
+		{
+			return -1;
+		}
+		*p_port = ntohs(((struct sockaddr_in*)p_sa)->sin_port);
+		break;
+	}
+	case AF_INET6:
+	{
+		if(NULL == inet_ntop(AF_INET6, &(((struct sockaddr_in6*)p_sa)->sin6_addr), p_buffer, p_bufferSize))
+		{
+			return -1;
+		}
+		*p_port = ntohs(((struct sockaddr_in6*)p_sa)->sin6_port);
+		break;
+	}
+	default:
+		return -1;
+	}
+	return 0;
+}
+
+void showLocalAddress(int p_socket, int p_netType)
+{
+	char l_host[32] = { 0 };
+	int l_port = 0;
+
+	switch(p_netType)
+	{
+	case AF_INET:
+	{
+		struct sockaddr_in l_localAddr;
+		socklen_t l_localAddrLength = sizeof(struct sockaddr_in);
+		if(0 != getsockname(p_socket, (struct sockaddr*)&l_localAddr, &l_localAddrLength))
+		{
+			printf("showLocalAddress - getsockname failed\n");
+		}
+		else
+		{
+			if(0 == getAddressString((struct sockaddr*)&l_localAddr, l_host, sizeof(l_host), &l_port))
+			{
+				printf("local address %s:%d\n", l_host, l_port);
+			}
+		}
+		break;
+	}
+	case AF_INET6:
+	{
+		struct sockaddr_in6 l_localAddr;
+		socklen_t l_localAddrLength = sizeof(struct sockaddr_in6);
+		if(0 != getsockname(p_socket, (struct sockaddr*)&l_localAddr, &l_localAddrLength))
+		{
+			printf("showLocalAddress - getsockname failed\n");
+		}
+		else
+		{
+			if(0 == getAddressString((struct sockaddr*)&l_localAddr, l_host, sizeof(l_host), &l_port))
+			{
+				printf("local address %s:%d\n", l_host, l_port);
+			}
+		}
+		break;
+	}
+	default:
+	{
+		printf("unsupported type %d\n", p_netType);
+		break;
+	}
+	}
+}
 
 int main(int argc, char **argv)
 {
@@ -1136,6 +1217,8 @@ int main(int argc, char **argv)
 		coap_log(LOG_EMERG, "cannot create context\n");
 		return -1;
 	}
+
+	showLocalAddress(ctx->sockfd, dst.addr.sa.sa_family);
 
 	coap_register_option(ctx, COAP_OPTION_BLOCK2);
 	coap_register_response_handler(ctx, message_handler);

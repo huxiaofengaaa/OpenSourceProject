@@ -2,6 +2,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <arpa/inet.h>
+#include <netinet/ip.h>
+#include <netinet/in.h>
 #include "coap.h"
 
 static int order_opts(void *a, void *b);
@@ -60,11 +63,11 @@ void showURLResource(char* p_dstUrl, str* p_dstHost, str* p_dstPath, str* p_dstQ
 		printf("p_dstUrl = %s\n", p_dstUrl);
 	}
 	if(p_dstHost){
-		printf("dstHost = %s\n", p_dstHost->s);
+		printf("dstHost  = %s\n", p_dstHost->s);
 	}
-	printf("dstPort = %d\n", p_dstPort);
+	printf("dstPort  = %d\n", p_dstPort);
 	if(p_dstPath){
-		printf("dstPath = %s\n", p_dstPath->s);
+		printf("dstPath  = %s\n", p_dstPath->s);
 	}
 	if(p_dstQuery){
 		printf("dstQuery = %s\n", p_dstQuery->s);
@@ -78,7 +81,7 @@ void showOptList(coap_list_t * p_currentOptList)
 	for(l_tmp = p_currentOptList; l_tmp != NULL; l_tmp = l_tmp->next)
 	{
 		coap_option *l_option = l_tmp->data;
-		printf("optlist[%d] = key:%d, length:%d, data:%s\n", l_optlistCounter++,
+		printf("optlist[%d] = key:%2d, length:%2d, data:%s\n", l_optlistCounter++,
 				l_option->key, l_option->length, ((unsigned char*)l_option + sizeof(coap_option)));
 	}
 }
@@ -269,6 +272,88 @@ coap_context_t  *getClientCoapContext(int p_netType)
 	return l_context;
 }
 
+int getAddressString(struct sockaddr* p_sa, char* p_buffer, int p_bufferSize, int* p_port)
+{
+	if(p_sa == NULL || p_buffer == NULL || p_port == NULL)
+	{
+		return -1;
+	}
+
+	switch(p_sa->sa_family)
+	{
+	case AF_INET:
+	{
+		if(NULL == inet_ntop(AF_INET, &(((struct sockaddr_in*)p_sa)->sin_addr), p_buffer, p_bufferSize))
+		{
+			return -1;
+		}
+		*p_port = ntohs(((struct sockaddr_in*)p_sa)->sin_port);
+		break;
+	}
+	case AF_INET6:
+	{
+		if(NULL == inet_ntop(AF_INET6, &(((struct sockaddr_in6*)p_sa)->sin6_addr), p_buffer, p_bufferSize))
+		{
+			return -1;
+		}
+		*p_port = ntohs(((struct sockaddr_in6*)p_sa)->sin6_port);
+		break;
+	}
+	default:
+		return -1;
+	}
+	return 0;
+}
+
+void showLocalAddress(int p_socket, int p_netType)
+{
+	char l_host[32] = { 0 };
+	int l_port = 0;
+
+	switch(p_netType)
+	{
+	case AF_INET:
+	{
+		struct sockaddr_in l_localAddr;
+		socklen_t l_localAddrLength = sizeof(struct sockaddr_in);
+		if(0 != getsockname(p_socket, (struct sockaddr*)&l_localAddr, &l_localAddrLength))
+		{
+			printf("showLocalAddress - getsockname failed\n");
+		}
+		else
+		{
+			if(0 == getAddressString((struct sockaddr*)&l_localAddr, l_host, sizeof(l_host), &l_port))
+			{
+				printf("local address %s:%d\n", l_host, l_port);
+			}
+		}
+		break;
+	}
+	case AF_INET6:
+	{
+		struct sockaddr_in6 l_localAddr;
+		socklen_t l_localAddrLength = sizeof(struct sockaddr_in6);
+		if(0 != getsockname(p_socket, (struct sockaddr*)&l_localAddr, &l_localAddrLength))
+		{
+			printf("showLocalAddress - getsockname failed\n");
+		}
+		else
+		{
+			if(0 == getAddressString((struct sockaddr*)&l_localAddr, l_host, sizeof(l_host), &l_port))
+			{
+				printf("local address %s:%d\n", l_host, l_port);
+			}
+		}
+		break;
+	}
+	default:
+	{
+		printf("unsupported type %d\n", p_netType);
+		break;
+	}
+	}
+}
+
 int sendCoapRequestMsg(char* p_dstUrl)
 {
 	if(p_dstUrl == NULL || strlen(p_dstUrl) <= 0)
@@ -277,6 +362,9 @@ int sendCoapRequestMsg(char* p_dstUrl)
 	}
 	coap_set_log_level(LOG_DEBUG);
 
+	/*
+	 * resolve input cmd line URL
+	 */
 	str *l_dstHost, *l_dstPath, *l_dstPuery;
 	int l_dstPort;
 	if(0 != resolveURLResource(p_dstUrl, &l_dstHost, &l_dstPath, &l_dstPuery, &l_dstPort))
@@ -285,6 +373,9 @@ int sendCoapRequestMsg(char* p_dstUrl)
 	}
 	showURLResource(p_dstUrl, l_dstHost, l_dstPath, l_dstPuery, l_dstPort);
 
+	/*
+	 * resolve destination address
+	 */
 	coap_address_t l_dstAddr;
 	void *addrptr = NULL;
 	if(0 != resolveDstAddress(l_dstHost, l_dstPort, &l_dstAddr))
@@ -294,19 +385,28 @@ int sendCoapRequestMsg(char* p_dstUrl)
 	}
 	showDstAddr(&l_dstAddr);
 
+	/*
+	 * create an coap client context used for send msg
+	 */
 	coap_context_t  *l_coapContext = getClientCoapContext(l_dstAddr.addr.sa.sa_family);
 	if(l_coapContext == NULL)
 	{
 		releaseURLResource(l_dstHost, l_dstPath, l_dstPuery);
 		return -1;
 	}
+	showLocalAddress(l_coapContext->sockfd, l_dstAddr.addr.sa.sa_family);
 
+	/*
+	 * create opt list for current coap request message
+	 */
 	coap_list_t *l_currentOptlist = NULL;
 	createOptList(l_dstPort, l_dstHost, l_dstPath, l_dstPuery, &l_currentOptlist);
 	showOptList(l_currentOptlist);
 
+	/*
+	 * release resource and memory
+	 */
 	releaseURLResource(l_dstHost, l_dstPath, l_dstPuery);
-
 	coap_free_context(l_coapContext);
 	return 0;
 }
@@ -314,7 +414,6 @@ int sendCoapRequestMsg(char* p_dstUrl)
 int main(int argc, char** argv)
 {
 	char* l_inputUrl2 = "coap://[10.96.17.51]/sensors/temperature?value";
-	//char* l_inputUrl2 = "coap://[::1]/sensors/temperature?value";
 	sendCoapRequestMsg(l_inputUrl2);
 	return 0;
 }
