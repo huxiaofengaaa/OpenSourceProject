@@ -20,7 +20,13 @@ include_directories(./include)
 
 add_library(coap STATIC ${COAP_SRC})
 
-add_executable(coapClient  demo/coapClient.c)
+add_executable(coapClient  demo/coapClient.c
+                           demo/coapResponse.c
+                           demo/coapOpt.c
+                           demo/coapURL.c
+                           demo/coapNetAddress.c
+                           demo/coapPDU.c
+                           demo/coapContext.c)
 target_link_libraries(coapClient coap)
 
 add_executable(client  example/client.c)
