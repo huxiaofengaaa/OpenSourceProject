@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -72,6 +74,30 @@ void showURLResource(char* p_dstUrl, str* p_dstHost, str* p_dstPath, str* p_dstQ
 	if(p_dstQuery){
 		printf("dstQuery = %s\n", p_dstQuery->s);
 	}
+	printf("\n");
+}
+
+char* getOptKeyName(int p_optKey)
+{
+	switch(p_optKey)
+	{
+	case  1: return "COAP_OPTION_IF_MATCH";
+	case  3: return "COAP_OPTION_URI_HOST";
+	case  4: return "COAP_OPTION_ETAG";
+	case  5: return "COAP_OPTION_IF_NONE_MATCH";
+	case  7: return "COAP_OPTION_URI_PORT";
+	case  8: return "COAP_OPTION_LOCATION_PATH";
+	case 11: return "COAP_OPTION_URI_PATH";
+	case 12: return "COAP_OPTION_CONTENT_FORMAT";
+	case 14: return "COAP_OPTION_MAXAGE";
+	case 15: return "COAP_OPTION_URI_QUERY";
+	case 17: return "COAP_OPTION_ACCEPT";
+	case 20: return "COAP_OPTION_LOCATION_QUERY";
+	case 35: return "COAP_OPTION_PROXY_URI";
+	case 39: return "COAP_OPTION_PROXY_SCHEME";
+	case 60: return "COAP_OPTION_SIZE1";
+	default: return "unknown";
+	}
 }
 
 void showOptList(coap_list_t * p_currentOptList)
@@ -81,9 +107,11 @@ void showOptList(coap_list_t * p_currentOptList)
 	for(l_tmp = p_currentOptList; l_tmp != NULL; l_tmp = l_tmp->next)
 	{
 		coap_option *l_option = l_tmp->data;
-		printf("optlist[%d] = key:%2d, length:%2d, data:%s\n", l_optlistCounter++,
-				l_option->key, l_option->length, ((unsigned char*)l_option + sizeof(coap_option)));
+		printf("optlist[%d] = key:%26s, length:%2d, data:%s\n", l_optlistCounter++,
+				getOptKeyName(l_option->key), l_option->length,
+				((unsigned char*)l_option + sizeof(coap_option)));
 	}
+	printf("\n");
 }
 
 void createOptList(int p_port, str* p_host, str* p_path, str* p_query, coap_list_t ** p_saveOptList)
@@ -168,10 +196,17 @@ int resolveDstAddress(str* p_host, int p_port, coap_address_t* p_dstAddr)
 		switch (l_ainfo->ai_family)
 		{
 		case AF_INET6:
+		{
+			memcpy((void*)&(p_dstAddr->addr.sa), l_ainfo->ai_addr, l_ainfo->ai_addrlen);
+			p_dstAddr->size = l_ainfo->ai_addrlen;
+			p_dstAddr->addr.sin.sin_port = htons(p_port);
+			break;
+		}
 		case AF_INET:
 		{
 			memcpy((void*)&(p_dstAddr->addr.sa), l_ainfo->ai_addr, l_ainfo->ai_addrlen);
 			p_dstAddr->size = l_ainfo->ai_addrlen;
+			p_dstAddr->addr.sin6.sin6_port = htons(p_port);
 			break;
 		}
 		default:
@@ -203,6 +238,7 @@ void showDstAddr(coap_address_t* p_dstAddr)
 		inet_ntop(p_dstAddr->addr.sa.sa_family, l_addrptr, l_tmpAddr, sizeof(l_tmpAddr));
 		printf("p_dstAddr addr = %s \n", l_tmpAddr);
 	}
+	printf("\n");
 }
 
 coap_context_t *get_context(const char *node, const char *port)
@@ -323,6 +359,7 @@ void showLocalAddress(int p_socket, int p_netType)
 			printf("local address %s:%d\n", l_host, l_port);
 		}
 	}
+	printf("\n");
 
 #if 0
 	switch(p_netType)
@@ -375,9 +412,6 @@ void showLocalAddress(int p_socket, int p_netType)
 coap_pdu_t *createCoapNewRequest(coap_context_t *p_coapContext, char* p_method, coap_list_t *p_optlist, unsigned char p_msgType,
 		str* p_Token, str* p_payload)
 {
-
-	//coap_list_t *opt;
-
 	if(p_coapContext == NULL || p_method == NULL)
 	{
 		return NULL;
@@ -478,6 +512,40 @@ void showPDU(coap_pdu_t *p_pdu)
 			printf("[PUD] data    %s\n", p_pdu->data);
 		}
 	}
+	printf("\n");
+}
+
+int sendCoapPdu(coap_context_t  *p_coapContext, coap_pdu_t * p_pdu, coap_address_t* p_clientDstAddr)
+{
+	coap_tid_t l_tid = COAP_INVALID_TID;
+	int l_actionResult = -1;
+	if(p_pdu == NULL || p_coapContext == NULL || p_clientDstAddr == NULL)
+	{
+		return l_actionResult;
+	}
+	if (p_pdu->hdr->type == COAP_MESSAGE_CON)
+	{
+		l_tid = coap_send_confirmed(p_coapContext, p_clientDstAddr, p_pdu);
+	}
+	else
+	{
+		l_tid = coap_send(p_coapContext, p_clientDstAddr, p_pdu);
+	}
+	if(l_tid == COAP_INVALID_TID)
+	{
+		printf("sendCoapPdu failed, %s\n", strerror(errno));
+		l_actionResult = -1;
+		coap_delete_pdu(p_pdu);
+	}
+	else
+	{
+		if(p_pdu->hdr->type != COAP_MESSAGE_CON)
+		{
+			coap_delete_pdu(p_pdu);
+		}
+		l_actionResult = 0;
+	}
+	return l_actionResult;
 }
 
 int sendCoapRequestMsg(char* p_dstUrl, char* p_method, char* p_token, char* p_payload)
@@ -510,6 +578,10 @@ int sendCoapRequestMsg(char* p_dstUrl, char* p_method, char* p_token, char* p_pa
 		return -1;
 	}
 	showDstAddr(&l_dstAddr);
+	char l_host[32] = { 0 };
+	int l_port = 0;
+	getAddressString((struct sockaddr*)&(l_dstAddr.addr.sa), l_host, sizeof(l_host), &l_port);
+	printf("host %s, port %d\n", l_host, l_port);
 
 	/*
 	 * create an coap client context used for send msg
@@ -536,8 +608,9 @@ int sendCoapRequestMsg(char* p_dstUrl, char* p_method, char* p_token, char* p_pa
 	COAP_SET_STR(&l_token, strlen(p_token), p_token);
 	str l_payload;
 	COAP_SET_STR(&l_payload, strlen(p_payload), p_payload);
+	const unsigned char c_msgType = COAP_MESSAGE_CON;
 	coap_pdu_t * l_newPDU = createCoapNewRequest(l_coapContext, p_method, l_currentOptlist,
-			COAP_MESSAGE_CON, &l_token, &l_payload);
+			c_msgType, &l_token, &l_payload);
 	if(l_newPDU == NULL)
 	{
 		printf("create new coap request failed\n");
@@ -548,9 +621,23 @@ int sendCoapRequestMsg(char* p_dstUrl, char* p_method, char* p_token, char* p_pa
 	showPDU(l_newPDU);
 
 	/*
+	 * send pdu message
+	 */
+	if(0 != sendCoapPdu(l_coapContext, l_newPDU, &l_dstAddr))
+	{
+		printf("send coap pdu failed\n");
+		releaseURLResource(l_dstHost, l_dstPath, l_dstPuery);
+		coap_free_context(l_coapContext);
+		return -1;
+	}
+	else
+	{
+		printf("send coap pdu successfully\n");
+	}
+
+	/*
 	 * release resource and memory
 	 */
-	coap_delete_pdu(l_newPDU);
 	releaseURLResource(l_dstHost, l_dstPath, l_dstPuery);
 	coap_free_context(l_coapContext);
 	return 0;
@@ -558,7 +645,7 @@ int sendCoapRequestMsg(char* p_dstUrl, char* p_method, char* p_token, char* p_pa
 
 int main(int argc, char** argv)
 {
-	char* l_inputUrl2 = "coap://[10.96.17.51]/sensors/temperature?value";
+	char* l_inputUrl2 = "coap://[10.96.17.50]/sensors/temperature?value";
 	char* l_token = "cafe";
 	char* l_payload = "abcd";
 	sendCoapRequestMsg(l_inputUrl2, "get", l_token, l_payload);
